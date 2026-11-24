@@ -1,5 +1,7 @@
 List of changes by me.
 
+Signature changed to 'speeduino 202504-vetuner'
+
 Branch: feat/Embended.INI
 
  Allow to read the .INI file directly from the device.
