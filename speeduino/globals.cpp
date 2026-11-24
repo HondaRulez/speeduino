@@ -117,7 +117,7 @@ asm(
   ".balign 4\n"
   ".global _ini_bin_start\n"
   "_ini_bin_start:\n"
-  ".incbin \"../reference/speeduino-hr-dev.ini.zst\"\n"
+  ".incbin \"../reference/speeduino-hr-dev.ini.gz\"\n"
   ".global _ini_bin_end\n"
   "_ini_bin_end:\n"
   ".section .text\n"
