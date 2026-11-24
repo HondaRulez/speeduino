@@ -31,11 +31,15 @@
 #include "atomic.h"
 #include "src/pins/pinNumbers_t.h"
 
-
 #ifndef UNIT_TEST 
 constexpr uint8_t TOOTH_LOG_SIZE = 127U;
 #else
 constexpr uint8_t TOOTH_LOG_SIZE = 2U;
+#endif
+
+#if defined(EMBENDED_INI)
+extern const uint8_t _ini_bin_start[];
+extern const uint8_t _ini_bin_end[];
 #endif
 
 extern struct table3d16RpmLoad fuelTable; //16x16 fuel map
@@ -79,5 +83,8 @@ bool pinIsOutput(byte pin, const pinNumbers_t &pins);
 static inline bool pinIsOutput(byte pin) { return pinIsOutput(pin, pinNumbers); }
 bool pinIsUsed(byte pin, const pinNumbers_t &pins);
 static inline bool pinIsUsed(byte pin) { return pinIsUsed(pin, pinNumbers); }
+
+uint32_t readU32(uint8_t* buffer, size_t offset);
+void writeU32(uint8_t* buffer, size_t offset, uint32_t val);
 
 #endif // GLOBALS_H

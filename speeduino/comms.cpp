@@ -81,7 +81,7 @@ static constexpr byte testCommsResponse[] PROGMEM = { SERIAL_RC_OK, 255 };
  * @note We can share one variable between rx & tx because we only support simplex serial comms. 
  * I.e. we can only be receiving or transmitting at any one time.
  */
-static uint16_t serialBytesRxTx = 0; 
+static size_t serialBytesRxTx = 0; 
 
 static constexpr uint16_t SERIAL_TIMEOUT = 400; //!< Timeout threshold in milliseconds
 uint32_t serialReceiveStartTime = 0; //!< The time in milliseconds at which the serial receive started. Used for calculating whether a timeout has occurred
@@ -103,7 +103,8 @@ static uint32_t SDreadNumSectors;
 static uint32_t SDreadCompletedSectors = 0;
 #endif
 static uint8_t serialPayload[TS_SERIAL_BUFFER_SIZE]; //!< Serial payload buffer. */
-static uint16_t serialPayloadLength = 0; //!< How many bytes in serialPayload were received or sent */
+static size_t serialPayloadLength = 0; //!< How many bytes in serialPayload were received or sent */
+static bool serialPayloadFromFlash = false;
 Stream* pPrimarySerial;
 static uint32_t deferEEPROMWritesStart = 0; //!< Time (µS) at which the current EEPROM write deferral began
 static uint32_t deferEEPROMWritesDelay = 0; //!< How long (µS) after deferEEPROMWritesStart before page writing can resume
@@ -222,9 +223,9 @@ static void serialWrite(uint16_t value)
 /** @brief Send as much data as possible without blocking the caller
  * @return Number of bytes sent
  */
-static uint16_t writeNonBlocking(const byte *buffer, size_t length)
+static size_t writeNonBlocking(const byte *buffer, size_t length)
 {
-  uint16_t bytesTransmitted = 0;
+  size_t bytesTransmitted = 0;
 
   while (bytesTransmitted<length 
         && primarySerial.availableForWrite() != 0 
@@ -263,19 +264,32 @@ static size_t writeNonBlocking(size_t start, uint32_t value)
  * @param length Total size of the buffer
  * @return Cumulative total number of bytes written . I.e. the next start value
  */
-static uint16_t sendBufferAndCrcNonBlocking(const byte *buffer, size_t start, size_t length)
+
+static size_t sendBufferAndCrcNonBlocking(const byte *buffer, size_t start, size_t length)
 {
+  size_t wr, end = start;
+  static crc_t crc;
+
   if (start<length)
   {
-    start = start + writeNonBlocking(buffer+start, length-start);
+    wr = writeNonBlocking(buffer+start, length-start);
+    
+    if(wr) {
+      end += wr;
+      if(start == 0)
+        crc = CRC32_serial.crc32(buffer, wr);
+      else {
+        crc = CRC32_serial.crc32_upd(buffer+start, wr);
+      }
+    }
   }
   
-  if (start>=length && start<length+sizeof(crc_t))
+  if (end>=length && end<length+sizeof(crc_t))
   {
-    start = start + writeNonBlocking(start-length, CRC32_serial.crc32(buffer, length));
+    end += writeNonBlocking(end-length, static_cast<uint32_t>(crc));
   }
 
-  return start;
+  return end;
 }
 
 /** @brief Start sending the shared serialPayload buffer.
@@ -287,13 +301,21 @@ static uint16_t sendBufferAndCrcNonBlocking(const byte *buffer, size_t start, si
  * 
  * @param payloadLength How many bytes to send [0, sizeof(serialPayload))
 */
-static void sendSerialPayloadNonBlocking(uint16_t payloadLength)
+
+static void sendSerialPayloadNonBlocking(size_t payloadLength, bool flash=false)
 {
   //Start new transmission session
   serialStatusFlag = SERIAL_TRANSMIT_INPROGRESS;
-  serialWrite(payloadLength);
   serialPayloadLength = payloadLength;
-  serialBytesRxTx = sendBufferAndCrcNonBlocking(serialPayload, 0, payloadLength);
+  serialPayloadFromFlash = flash;
+  if(! flash) {
+    serialWrite(static_cast<uint16_t>(payloadLength));  
+    serialBytesRxTx = sendBufferAndCrcNonBlocking(serialPayload, 0, payloadLength);
+  } else {
+    serialWrite(static_cast<uint32_t>(payloadLength));
+    serialBytesRxTx = sendBufferAndCrcNonBlocking(reinterpret_cast<const byte*>(readU32(serialPayload, 0)), 0, payloadLength);
+  }
+
   serialStatusFlag = serialBytesRxTx==payloadLength+sizeof(crc_t) ? SERIAL_INACTIVE : SERIAL_TRANSMIT_INPROGRESS;
 }
 
@@ -511,8 +533,12 @@ void serialReceive(void)
     //Check for DTR reset byte. This is sent by Windows upon initial connection and causes issues if treated as the first real byte. It should simply be ignored. See https://github.com/speeduino/speeduino/issues/1112
     if(highByte == 0xF0) { primarySerial.read(); return; }
 
+#if defined(EMBENDED_INI) 
+    if(highByte == 'F' || highByte == '@')   
+#else
     //Check if the command is legacy using the call/response mechanism
     if(highByte == 'F')
+#endif    
     {
       //F command is always allowed as it provides the initial serial protocol version. 
       legacySerialCommand();
@@ -598,7 +624,11 @@ void serialTransmit(void)
       break;
 
     case SERIAL_TRANSMIT_INPROGRESS:
-      serialBytesRxTx = sendBufferAndCrcNonBlocking(serialPayload, serialBytesRxTx, serialPayloadLength);
+      if(serialPayloadFromFlash)
+        serialBytesRxTx = sendBufferAndCrcNonBlocking(reinterpret_cast<const byte*>(readU32(serialPayload, 0)), serialBytesRxTx, serialPayloadLength);
+      else
+        serialBytesRxTx = sendBufferAndCrcNonBlocking(serialPayload, serialBytesRxTx, serialPayloadLength);
+
       serialStatusFlag = serialBytesRxTx==serialPayloadLength+sizeof(crc_t) ? SERIAL_INACTIVE : SERIAL_TRANSMIT_INPROGRESS;
       break;
 
@@ -1116,6 +1146,14 @@ void processSerialCommand(void)
       break;
   }
 }
+
+#if defined(EMBENDED_INI) 
+void sendIni(void)
+{
+    writeU32(serialPayload, 0, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(_ini_bin_start)));
+    sendSerialPayloadNonBlocking(_ini_bin_end - _ini_bin_start, true);
+}
+#endif
 
 /** 
  * 

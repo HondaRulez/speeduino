@@ -34,4 +34,8 @@ bool isRxTimeout(void);
 /** @brief Test if the current storage write defer interval has expired. */
 bool storageWriteTimeoutExpired(void);
 
+#if defined(EMBENDED_INI) 
+void sendIni(void);
+#endif
+
 #endif // COMMS_H

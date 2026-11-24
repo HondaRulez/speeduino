@@ -98,3 +98,30 @@ bool pinIsUsed(byte pin, const pinNumbers_t &pins)
 
   return used;
 }
+
+// Read 32-bit value starting at index `offset` (e.g., offset = 0)
+uint32_t readU32(uint8_t* buffer, size_t offset) {
+  uint32_t val;
+  memcpy(&val, &buffer[offset], sizeof(uint32_t));
+  return val; 
+}
+
+// Write 32-bit value into `buffer` starting at `offset`
+void writeU32(uint8_t* buffer, size_t offset, uint32_t val) {
+  memcpy(&buffer[offset], &val, sizeof(uint32_t));
+}
+
+#if defined(EMBENDED_INI)
+asm(
+  ".section .rodata\n"
+  ".balign 4\n"
+  ".global _ini_bin_start\n"
+  "_ini_bin_start:\n"
+  ".incbin \"../reference/speeduino.ini.zst\"\n"
+  ".global _ini_bin_end\n"
+  "_ini_bin_end:\n"
+  ".section .text\n"
+);
+#endif
+
+

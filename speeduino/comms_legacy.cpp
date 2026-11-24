@@ -491,6 +491,11 @@ void legacySerialCommand(void)
       }
       break;
 
+#if defined(EMBENDED_INI) 
+    case '@':
+      sendIni();
+      break;    
+#endif
 
     case '?':
     #ifndef SMALL_FLASH_MODE
