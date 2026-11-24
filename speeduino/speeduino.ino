@@ -171,7 +171,10 @@ static void updateTimingTracking(void)
 BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
 {
   uint8_t originalBatteryVoltage = currentStatus.battery10;
-    
+
+#if defined(TINYUSB_NEED_POLLING_TASK)
+      TinyUSBDevice.task();
+#endif
       currentStatus.LOOP_TIMER = getAndClearTimerMask();
       updateTimingTracking();
 

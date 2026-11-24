@@ -32,6 +32,22 @@
   #include "stm32f4xx_ll_tim.h"
 #endif
 
+#if defined(USE_TINYUSB)
+
+#undef Serial // to suppress warning due the HW serial and TinyUSB definitions on the "Serial"
+#include <Adafruit_TinyUSB.h>
+// these are required due the weak support of the STM32
+
+#undef SerialTinyUSB
+#define Serial SerialTinyUSB
+
+// if VETuner and use iOS
+#if CFG_TUD_MIDI > 0
+extern Adafruit_USBD_MIDI usb_midi;
+#endif
+
+#endif
+
 /*
 ***********************************************************************************************************
 * General

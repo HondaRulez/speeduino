@@ -410,7 +410,29 @@ STM32RTC& rtc = STM32RTC::getInstance();
     Timer4.attachInterrupt(4, IGNITION_INTERRUPT_NAME(8));
     #endif
 
+#if defined(USE_TINYUSB)
+  if(!TinyUSBDevice.isInitialized())
+    TinyUSBDevice.begin();
+
+  Serial.begin(baudRate);
+  // Serial.setStringDescriptor("Speeduino Telemetry");
+
+  // some app uses Stringdescriptor of the IF some us the Cable Name.
+  const char *midi_name = "MidiIF";
+  usb_midi.setStringDescriptor(midi_name);
+  usb_midi.setCableName(1, midi_name);
+  usb_midi.begin();
+
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
+
+#else
     Serial.begin(baudRate);
+#endif
   }
 
   uint16_t freeRam()
