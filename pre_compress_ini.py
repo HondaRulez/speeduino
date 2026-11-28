@@ -4,6 +4,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+Import("env")
+
 def strip_ini_comment(line: bytes) -> bytes:
     quote_char = None
     i = 0
@@ -26,6 +28,7 @@ def strip_ini_comment(line: bytes) -> bytes:
 
 src = Path("reference/speeduino-hr-dev.ini")
 dst = Path("reference/speeduino-hr-dev.ini.gz")
+strip = env.GetProjectOption("embended_ini_strip", False)
 
 if src.exists():
     # Process as raw bytes (exact match to Linux sed)
@@ -40,7 +43,10 @@ if src.exists():
         if body.strip():
             cleaned_lines.append(body + ending)
 
-    cleaned = b"".join(cleaned_lines)
+    if strip:
+        cleaned = b"".join(cleaned_lines)
+    else:
+        cleaned = b"".join(raw_lines)
 
     # Overwrites dst unconditionally
     try:
