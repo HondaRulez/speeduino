@@ -4,6 +4,26 @@ import shutil
 import subprocess
 from pathlib import Path
 
+def strip_ini_comment(line: bytes) -> bytes:
+    quote_char = None
+    i = 0
+    n = len(line)
+    while i < n:
+        ch = line[i]
+        if quote_char is not None:
+            if ch == 92:  # '\' backslash escape inside quotes
+                i += 2
+                continue
+            if ch == quote_char:
+                quote_char = None
+        else:
+            if ch in (34, 39, 96):  # '"', "'", '`'
+                quote_char = ch
+            elif ch == 59:  # ';' outside quotes starts the comment
+                return line[:i]
+        i += 1
+    return line
+
 src = Path("reference/speeduino-hr-dev.ini")
 dst = Path("reference/speeduino-hr-dev.ini.gz")
 
@@ -15,7 +35,7 @@ if src.exists():
         ending = b"\r\n" if line.endswith(b"\r\n") else (b"\n" if line.endswith(b"\n") else b"")
         body = line[: -len(ending)] if ending else line
 
-        body = re.sub(b";.*", b"", body)
+        body = strip_ini_comment(body)
         body = re.sub(b"[ \t]+$", b"", body)
         if body.strip():
             cleaned_lines.append(body + ending)
